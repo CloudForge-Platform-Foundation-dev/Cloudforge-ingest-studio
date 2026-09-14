@@ -1,3 +1,5 @@
+﻿from fastapi import Depends
+from src.auth.dependencies import get_current_user
 from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 
 from src.ai_guard.guard import guard as ai_guard
@@ -10,10 +12,10 @@ from src.storage import store
 app = FastAPI(
     title="CloudForge Ingest API",
     version="0.3.0",
-    description="Ingest Studio API - รับข้อมูล asset เข้าสู่ CloudForge Platform",
+    description="Ingest Studio API - à¸£à¸±à¸šà¸‚à¹‰à¸­à¸¡à¸¹à¸¥ asset à¹€à¸‚à¹‰à¸²à¸ªà¸¹à¹ˆ CloudForge Platform",
 )
 
-# จำกัด concurrent request ไม่ให้ traffic พุ่งจนระบบล่ม (fail-fast แทนต่อคิวไม่จำกัด)
+# à¸ˆà¸³à¸à¸±à¸” concurrent request à¹„à¸¡à¹ˆà¹ƒà¸«à¹‰ traffic à¸žà¸¸à¹ˆà¸‡à¸ˆà¸™à¸£à¸°à¸šà¸šà¸¥à¹ˆà¸¡ (fail-fast à¹à¸—à¸™à¸•à¹ˆà¸­à¸„à¸´à¸§à¹„à¸¡à¹ˆà¸ˆà¸³à¸à¸±à¸”)
 backpressure_guard = BackpressureGuard(max_concurrent=100)
 
 
@@ -28,13 +30,13 @@ def root():
 
 
 def _save_batch(records_with_source: list[tuple[AssetRecord, str | None]]) -> IngestBatchResponse:
-    """ใช้ร่วมกันทั้ง /ingest (JSON) และ /ingest/file เพื่อไม่ให้ logic การเซฟซ้ำกันสองที่"""
+    """à¹ƒà¸Šà¹‰à¸£à¹ˆà¸§à¸¡à¸à¸±à¸™à¸—à¸±à¹‰à¸‡ /ingest (JSON) à¹à¸¥à¸° /ingest/file à¹€à¸žà¸·à¹ˆà¸­à¹„à¸¡à¹ˆà¹ƒà¸«à¹‰ logic à¸à¸²à¸£à¹€à¸‹à¸Ÿà¸‹à¹‰à¸³à¸à¸±à¸™à¸ªà¸­à¸‡à¸—à¸µà¹ˆ"""
     ingested: list[IngestedRecord] = []
     errors: list[str] = []
     for i, (record, source) in enumerate(records_with_source):
         try:
             ingested.append(store.save(record, asset_type_source=source))
-        except Exception as exc:  # กันไม่ให้ record เดียวพังทั้ง batch
+        except Exception as exc:  # à¸à¸±à¸™à¹„à¸¡à¹ˆà¹ƒà¸«à¹‰ record à¹€à¸”à¸µà¸¢à¸§à¸žà¸±à¸‡à¸—à¸±à¹‰à¸‡ batch
             errors.append(f"record[{i}] ({record.external_id}): {exc}")
     return IngestBatchResponse(
         accepted=len(ingested),
@@ -47,10 +49,10 @@ def _save_batch(records_with_source: list[tuple[AssetRecord, str | None]]) -> In
 @app.post("/ingest", response_model=IngestBatchResponse, status_code=201, tags=["Ingest"])
 def ingest_batch(request: IngestBatchRequest) -> IngestBatchResponse:
     """
-    รับ asset records เข้ามาเป็น batch ผ่าน JSON โดยตรง (asset_type ต้อง
-    ระบุมาชัดเจนเสมอในทางนี้ — บันทึกไว้เป็น asset_type_source='declared')
-    บันทึกพร้อม hash สำหรับ traceability แล้วคืนผลลัพธ์ว่า record ไหนสำเร็จ/
-    ไม่สำเร็จ
+    à¸£à¸±à¸š asset records à¹€à¸‚à¹‰à¸²à¸¡à¸²à¹€à¸›à¹‡à¸™ batch à¸œà¹ˆà¸²à¸™ JSON à¹‚à¸”à¸¢à¸•à¸£à¸‡ (asset_type à¸•à¹‰à¸­à¸‡
+    à¸£à¸°à¸šà¸¸à¸¡à¸²à¸Šà¸±à¸”à¹€à¸ˆà¸™à¹€à¸ªà¸¡à¸­à¹ƒà¸™à¸—à¸²à¸‡à¸™à¸µà¹‰ â€” à¸šà¸±à¸™à¸—à¸¶à¸à¹„à¸§à¹‰à¹€à¸›à¹‡à¸™ asset_type_source='declared')
+    à¸šà¸±à¸™à¸—à¸¶à¸à¸žà¸£à¹‰à¸­à¸¡ hash à¸ªà¸³à¸«à¸£à¸±à¸š traceability à¹à¸¥à¹‰à¸§à¸„à¸·à¸™à¸œà¸¥à¸¥à¸±à¸žà¸˜à¹Œà¸§à¹ˆà¸² record à¹„à¸«à¸™à¸ªà¸³à¹€à¸£à¹‡à¸ˆ/
+    à¹„à¸¡à¹ˆà¸ªà¸³à¹€à¸£à¹‡à¸ˆ
     """
     try:
         with backpressure_guard:
@@ -63,20 +65,20 @@ def ingest_batch(request: IngestBatchRequest) -> IngestBatchResponse:
 
 
 @app.post("/ingest/file", response_model=IngestBatchResponse, status_code=201, tags=["Ingest"])
-async def ingest_file(
-    file: UploadFile = File(..., description="ไฟล์ CSV, JSON หรือ Excel (.xlsx/.xls)"),
+async def ingest_file(user: dict = Depends(get_current_user),
+    file: UploadFile = File(..., description="à¹„à¸Ÿà¸¥à¹Œ CSV, JSON à¸«à¸£à¸·à¸­ Excel (.xlsx/.xls)"),
     mapping: str = Query(
         "default",
-        description="ชื่อ mapping config (ดู mappings/default_mapping.yaml) ที่จะใช้แปลง column ของไฟล์นี้",
+        description="à¸Šà¸·à¹ˆà¸­ mapping config (à¸”à¸¹ mappings/default_mapping.yaml) à¸—à¸µà¹ˆà¸ˆà¸°à¹ƒà¸Šà¹‰à¹à¸›à¸¥à¸‡ column à¸‚à¸­à¸‡à¹„à¸Ÿà¸¥à¹Œà¸™à¸µà¹‰",
     ),
 ) -> IngestBatchResponse:
     """
-    รับไฟล์ CSV/JSON/Excel เข้ามา parse ผ่าน parser registry + metadata-driven
-    mapping (เพิ่ม source ใหม่ = เพิ่ม mapping ใน YAML ไม่ต้องแก้โค้ด)
+    à¸£à¸±à¸šà¹„à¸Ÿà¸¥à¹Œ CSV/JSON/Excel à¹€à¸‚à¹‰à¸²à¸¡à¸² parse à¸œà¹ˆà¸²à¸™ parser registry + metadata-driven
+    mapping (à¹€à¸žà¸´à¹ˆà¸¡ source à¹ƒà¸«à¸¡à¹ˆ = à¹€à¸žà¸´à¹ˆà¸¡ mapping à¹ƒà¸™ YAML à¹„à¸¡à¹ˆà¸•à¹‰à¸­à¸‡à¹à¸à¹‰à¹‚à¸„à¹‰à¸”)
 
-    ถ้า mapping หาคอลัมน์ asset_type ไม่เจอ จะให้ AI Guard (cloud → local
-    fallback อัตโนมัติถ้า cloud ใช้ไม่ได้) ช่วย classify ให้ พร้อมบันทึก
-    ที่มาไว้ใน asset_type_source ของแต่ละ record เพื่อตรวจสอบย้อนหลังได้
+    à¸–à¹‰à¸² mapping à¸«à¸²à¸„à¸­à¸¥à¸±à¸¡à¸™à¹Œ asset_type à¹„à¸¡à¹ˆà¹€à¸ˆà¸­ à¸ˆà¸°à¹ƒà¸«à¹‰ AI Guard (cloud â†’ local
+    fallback à¸­à¸±à¸•à¹‚à¸™à¸¡à¸±à¸•à¸´à¸–à¹‰à¸² cloud à¹ƒà¸Šà¹‰à¹„à¸¡à¹ˆà¹„à¸”à¹‰) à¸Šà¹ˆà¸§à¸¢ classify à¹ƒà¸«à¹‰ à¸žà¸£à¹‰à¸­à¸¡à¸šà¸±à¸™à¸—à¸¶à¸
+    à¸—à¸µà¹ˆà¸¡à¸²à¹„à¸§à¹‰à¹ƒà¸™ asset_type_source à¸‚à¸­à¸‡à¹à¸•à¹ˆà¸¥à¸° record à¹€à¸žà¸·à¹ˆà¸­à¸•à¸£à¸§à¸ˆà¸ªà¸­à¸šà¸¢à¹‰à¸­à¸™à¸«à¸¥à¸±à¸‡à¹„à¸”à¹‰
     """
     try:
         parser = get_parser(file.filename or "")
@@ -123,10 +125,13 @@ async def ingest_file(
 def get_ingested_record(ingest_id: str) -> IngestedRecord:
     record = store.get(ingest_id)
     if record is None:
-        raise HTTPException(status_code=404, detail=f"ไม่พบ ingest_id: {ingest_id}")
+        raise HTTPException(status_code=404, detail=f"à¹„à¸¡à¹ˆà¸žà¸š ingest_id: {ingest_id}")
     return record
 
 
 @app.get("/ingest", response_model=list[IngestedRecord], tags=["Ingest"])
-def list_ingested_records() -> list[IngestedRecord]:
+def list_ingested_records(user: dict = Depends(get_current_user)) -> list[IngestedRecord]:
     return store.list_all()
+
+
+

@@ -1,10 +1,20 @@
-"""
-Integration tests ผ่าน FastAPI TestClient
+﻿from src.main import app
+from src.auth.dependencies import get_current_user
+import pytest
 
-หมายเหตุ: ไฟล์นี้ต้องมี fastapi/httpx ติดตั้งถึงจะรันได้
-(pip install -r requirements-dev.txt) — แยกจาก tests/test_parsers.py,
-test_mapping.py, test_resilience.py, test_ai_guard.py ที่รันได้ด้วย
-stdlib unittest ล้วนๆ โดยไม่ต้องติดตั้งอะไรเพิ่ม
+@pytest.fixture(autouse=True)
+def override_auth_dependency():
+    app.dependency_overrides[get_current_user] = lambda: {"sub": "test-user", "role": "admin"}
+    yield
+    app.dependency_overrides.clear()
+
+"""
+Integration tests à¸œà¹ˆà¸²à¸™ FastAPI TestClient
+
+à¸«à¸¡à¸²à¸¢à¹€à¸«à¸•à¸¸: à¹„à¸Ÿà¸¥à¹Œà¸™à¸µà¹‰à¸•à¹‰à¸­à¸‡à¸¡à¸µ fastapi/httpx à¸•à¸´à¸”à¸•à¸±à¹‰à¸‡à¸–à¸¶à¸‡à¸ˆà¸°à¸£à¸±à¸™à¹„à¸”à¹‰
+(pip install -r requirements-dev.txt) â€” à¹à¸¢à¸à¸ˆà¸²à¸ tests/test_parsers.py,
+test_mapping.py, test_resilience.py, test_ai_guard.py à¸—à¸µà¹ˆà¸£à¸±à¸™à¹„à¸”à¹‰à¸”à¹‰à¸§à¸¢
+stdlib unittest à¸¥à¹‰à¸§à¸™à¹† à¹‚à¸”à¸¢à¹„à¸¡à¹ˆà¸•à¹‰à¸­à¸‡à¸•à¸´à¸”à¸•à¸±à¹‰à¸‡à¸­à¸°à¹„à¸£à¹€à¸žà¸´à¹ˆà¸¡
 """
 
 import json
@@ -18,7 +28,7 @@ from src.storage import store
 
 @pytest.fixture(autouse=True)
 def _reset_store():
-    """เคลียร์ in-memory store ก่อนทุก test กันไม่ให้ test ก่อนหน้ากระทบกัน"""
+    """à¹€à¸„à¸¥à¸µà¸¢à¸£à¹Œ in-memory store à¸à¹ˆà¸­à¸™à¸—à¸¸à¸ test à¸à¸±à¸™à¹„à¸¡à¹ˆà¹ƒà¸«à¹‰ test à¸à¹ˆà¸­à¸™à¸«à¸™à¹‰à¸²à¸à¸£à¸°à¸—à¸šà¸à¸±à¸™"""
     store._records.clear()
     yield
     store._records.clear()
@@ -67,7 +77,7 @@ class TestIngestJson:
             ]
         }
         resp = client.post("/ingest", json=payload)
-        # pydantic validation ที่ระดับ request body -> 422 ตั้งแต่ก่อนถึง handler
+        # pydantic validation à¸—à¸µà¹ˆà¸£à¸°à¸”à¸±à¸š request body -> 422 à¸•à¸±à¹‰à¸‡à¹à¸•à¹ˆà¸à¹ˆà¸­à¸™à¸–à¸¶à¸‡ handler
         assert resp.status_code == 422
 
 
@@ -88,8 +98,8 @@ class TestIngestFile:
         assert all(r["asset_type_source"] == "declared" for r in body["records"])
 
     def test_ingest_csv_without_asset_type_uses_ai_guard_fallback(self, client):
-        """ไม่มีคอลัมน์ asset_type เลย -> ต้องผ่าน AI Guard และเนื่องจากยังไม่ได้
-        เสียบ cloud client จริง (CloudAIBackend เป็น stub) จะได้ local_fallback เสมอ"""
+        """à¹„à¸¡à¹ˆà¸¡à¸µà¸„à¸­à¸¥à¸±à¸¡à¸™à¹Œ asset_type à¹€à¸¥à¸¢ -> à¸•à¹‰à¸­à¸‡à¸œà¹ˆà¸²à¸™ AI Guard à¹à¸¥à¸°à¹€à¸™à¸·à¹ˆà¸­à¸‡à¸ˆà¸²à¸à¸¢à¸±à¸‡à¹„à¸¡à¹ˆà¹„à¸”à¹‰
+        à¹€à¸ªà¸µà¸¢à¸š cloud client à¸ˆà¸£à¸´à¸‡ (CloudAIBackend à¹€à¸›à¹‡à¸™ stub) à¸ˆà¸°à¹„à¸”à¹‰ local_fallback à¹€à¸ªà¸¡à¸­"""
         csv_content = "source_system,external_id,name\nlegacy-cmdb,CI-1,prod-mysql-primary\n"
         resp = client.post(
             "/ingest/file",
@@ -100,7 +110,7 @@ class TestIngestFile:
         assert body["accepted"] == 1
         record = body["records"][0]
         assert record["asset_type_source"] == "local_fallback"
-        assert record["asset_type"] == "database"  # local backend เจอ keyword "mysql"
+        assert record["asset_type"] == "database"  # local backend à¹€à¸ˆà¸­ keyword "mysql"
 
     def test_ingest_json_file(self, client):
         payload = json.dumps(
@@ -123,7 +133,7 @@ class TestIngestFile:
     def test_malformed_csv_returns_400(self, client):
         resp = client.post(
             "/ingest/file",
-            files={"file": ("assets.csv", "asset_type\nvm\n", "text/csv")},  # ไม่มี source_system/external_id
+            files={"file": ("assets.csv", "asset_type\nvm\n", "text/csv")},  # à¹„à¸¡à¹ˆà¸¡à¸µ source_system/external_id
         )
         assert resp.status_code == 400
 
@@ -163,3 +173,4 @@ class TestGetIngestedRecords:
         resp = client.get("/ingest")
         assert resp.status_code == 200
         assert len(resp.json()) == 1
+
