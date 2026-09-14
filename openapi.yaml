@@ -1,0 +1,347 @@
+openapi: 3.0.3
+info:
+  title: CloudForge Ingest API
+  version: 0.3.0
+  description: Ingest Studio API - รับข้อมูลเข้าสู่ CloudForge Platform
+  x-owner: ingest-team
+  x-domain: data-ingestion
+  x-governance-id: CFG-INGEST-001
+  contact:
+    name: CloudForge Ingest Team
+    email: ingest@cloudforge.example.com
+  license:
+    name: Proprietary
+    url: https://cloudforge.example.com/license
+
+servers:
+  - url: https://api.cloudforge.example.com/v1
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+tags:
+  - name: Health
+    description: Health and status endpoints
+  - name: Ingest
+    description: รับ asset record เข้าสู่ CloudForge Platform ผ่าน JSON API หรือไฟล์อัปโหลด (CSV/JSON/Excel)
+
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns service health status for probes and monitoring.
+      operationId: healthCheck
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /:
+    get:
+      tags: [Health]
+      summary: Root status
+      description: Returns basic service identity and status.
+      operationId: rootStatus
+      security: []
+      responses:
+        "200":
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [service, status]
+                properties:
+                  service:
+                    type: string
+                    example: cloudforge-ingest
+                  status:
+                    type: string
+                    example: ok
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /ingest:
+    post:
+      tags: [Ingest]
+      summary: Ingest asset records (JSON batch)
+      description: >-
+        รับ asset record เข้ามาเป็น batch ผ่าน JSON โดยตรง โดยต้องระบุ
+        asset_type ของทุก record มาชัดเจน (บันทึกเป็น asset_type_source
+        "declared" สำหรับตรวจสอบย้อนหลัง) แต่ละ record จะถูกคำนวณ content
+        hash เพื่อ traceability ก่อนบันทึก
+      operationId: ingestBatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestBatchRequest"
+      responses:
+        "201":
+          description: ผลลัพธ์การ ingest (มีทั้ง record ที่สำเร็จและไม่สำเร็จ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestBatchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          description: Request body ไม่ตรง schema (validation error จาก pydantic)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+    get:
+      tags: [Ingest]
+      summary: List ingested records
+      description: คืน record ทั้งหมดที่ ingest เข้ามาแล้ว (in-memory store)
+      operationId: listIngestedRecords
+      responses:
+        "200":
+          description: รายการ record ที่ ingest แล้วทั้งหมด
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngestedRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /ingest/file:
+    post:
+      tags: [Ingest]
+      summary: Ingest asset records from an uploaded file
+      description: >-
+        รับไฟล์ CSV, JSON หรือ Excel (.xlsx/.xls) เข้ามา parse ผ่าน parser
+        registry และแปลง column ให้ตรง internal schema ด้วย metadata-driven
+        mapping (เลือก mapping config ผ่าน query param `mapping`) ถ้าไฟล์ไม่มี
+        คอลัมน์บอก asset_type จะให้ AI Guard (cloud backend ก่อน แล้ว
+        fallback ไป local rule-based เมื่อ cloud ใช้ไม่ได้) ช่วย classify
+        ให้ และบันทึกที่มาไว้ใน asset_type_source ของแต่ละ record
+      operationId: ingestFile
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: ไฟล์ CSV, JSON หรือ Excel ที่ต้องการ ingest
+      parameters:
+        - name: mapping
+          in: query
+          required: false
+          description: ชื่อ mapping config (ดู mappings/default_mapping.yaml) ที่จะใช้แปลง column ของไฟล์นี้
+          schema:
+            type: string
+            default: default
+      responses:
+        "201":
+          description: ผลลัพธ์การ ingest จากไฟล์ (มีทั้ง record ที่สำเร็จและไม่สำเร็จ)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestBatchResponse"
+        "400":
+          description: ไฟล์นามสกุลไม่รองรับ หรือ parse/mapping ไม่สำเร็จ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "503":
+          description: ระบบรับงานเกิน capacity ชั่วคราว (backpressure)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /ingest/{ingest_id}:
+    get:
+      tags: [Ingest]
+      summary: Get a single ingested record
+      description: คืนรายละเอียดของ record ที่ ingest แล้วหนึ่งรายการ ตาม ingest_id
+      operationId: getIngestedRecord
+      parameters:
+        - name: ingest_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Record ที่พบ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestedRecord"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT from CloudForge Identity Service
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+  schemas:
+    AssetType:
+      type: string
+      enum: [vm, database, storage_bucket, network_config, application]
+      description: ประเภทของ asset ที่รับเข้ามา migrate
+
+    AssetRecord:
+      type: object
+      required: [source_system, asset_type, external_id]
+      properties:
+        source_system:
+          type: string
+          example: aws-prod
+          description: ระบบต้นทาง เช่น 'aws-prod', 'on-prem-vsphere'
+        asset_type:
+          $ref: "#/components/schemas/AssetType"
+        external_id:
+          type: string
+          example: i-0123456789
+          description: ID ของ asset ในระบบต้นทาง
+        payload:
+          type: object
+          additionalProperties: true
+          description: ข้อมูลดิบของ asset
+
+    IngestBatchRequest:
+      type: object
+      required: [records]
+      properties:
+        records:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/AssetRecord"
+
+    IngestedRecord:
+      type: object
+      required: [ingest_id, source_system, asset_type, external_id, content_hash, ingested_at]
+      properties:
+        ingest_id:
+          type: string
+          format: uuid
+        source_system:
+          type: string
+        asset_type:
+          $ref: "#/components/schemas/AssetType"
+        external_id:
+          type: string
+        content_hash:
+          type: string
+          description: SHA-256 hash ของ payload สำหรับ traceability
+        ingested_at:
+          type: string
+          format: date-time
+        asset_type_source:
+          type: string
+          nullable: true
+          enum: [declared, cloud, local_fallback]
+          description: >-
+            ที่มาของ asset_type สำหรับ audit trail: 'declared' (ผู้ส่งระบุเอง
+            ผ่าน /ingest), 'cloud' (AI Guard ใช้ cloud backend classify ให้),
+            'local_fallback' (cloud ใช้ไม่ได้ ใช้ deterministic rule-based แทน)
+
+    IngestBatchResponse:
+      type: object
+      required: [accepted, rejected, records, errors]
+      properties:
+        accepted:
+          type: integer
+        rejected:
+          type: integer
+        records:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngestedRecord"
+        errors:
+          type: array
+          items:
+            type: string
+
+    ErrorResponse:
+      type: object
+      required: [error, message]
+      properties:
+        error:
+          type: string
+          example: INTERNAL_ERROR
+        message:
+          type: string
+        requestId:
+          type: string
+          format: uuid
+
+security:
+  - BearerAuth: []

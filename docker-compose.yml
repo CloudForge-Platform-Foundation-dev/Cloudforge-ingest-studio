@@ -1,0 +1,55 @@
+services:
+  ingest-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ingest-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ENV=development
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./src:/app/src
+      - ./mappings:/app/mappings
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./mappings
+          target: /app/mappings
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # เปิดใช้ทีหลังถ้า Ingest ต้องเก็บ state/queue
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ingest-redis
+  #   ports:
+  #     - "6379:6379"
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+
+  # postgres:
+  #   image: postgres:16-alpine
+  #   container_name: ingest-postgres
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     - POSTGRES_PASSWORD=devpassword
+  #     - POSTGRES_DB=ingest
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U postgres"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5

@@ -1,0 +1,29 @@
+# Metadata-driven field mapping สำหรับ Ingest Studio
+#
+# เพิ่ม source ใหม่ = เพิ่ม key ใหม่ข้างล่างนี้ ระบุว่าคอลัมน์ในไฟล์ต้นทาง
+# ชื่ออะไรบ้าง (รองรับหลายชื่อ, ไม่สนตัวพิมพ์เล็ก/ใหญ่) จะ map ไปเป็น field
+# ไหนของเรา — ไม่ต้องแก้โค้ด parser เลยสักบรรทัดเมื่อมี source ใหม่เข้ามา
+#
+# field ที่ไม่ได้ระบุไว้ในนี้ (เช่น asset_type ถ้า source ไม่มีคอลัมน์นี้)
+# จะถูกส่งต่อให้ AI Guard ช่วย classify แทนอัตโนมัติ
+
+version: 1
+
+mappings:
+  # ใช้เมื่อไม่ได้ระบุ mapping name ตอนอัปโหลด (?mapping=default หรือไม่ใส่เลย)
+  default:
+    source_system: ["source_system", "source", "system"]
+    asset_type: ["asset_type", "type", "asset_class"]
+    external_id: ["external_id", "id", "asset_id"]
+
+  # ตัวอย่าง: ไฟล์ export จาก AWS Migration Hub ที่ตั้งชื่อคอลัมน์ไม่เหมือนเรา
+  aws-migration-hub:
+    source_system: ["source account", "account id"]
+    asset_type: ["resource type"]
+    external_id: ["resource id", "arn"]
+
+  # ตัวอย่าง: ไม่มีคอลัมน์บอกประเภท asset เลย — ปล่อยให้ AI Guard classify
+  # จาก payload ที่เหลือทั้งหมด (name/description ฯลฯ)
+  legacy-cmdb-export:
+    source_system: ["cmdb_source"]
+    external_id: ["ci_id"]
