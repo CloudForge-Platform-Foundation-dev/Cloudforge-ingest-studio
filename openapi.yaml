@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: CloudForge Ingest API
-  version: 0.3.0
+  version: 0.4.0
   description: Ingest Studio API - รับข้อมูลเข้าสู่ CloudForge Platform
   x-owner: ingest-team
   x-domain: data-ingestion

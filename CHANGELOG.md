@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.4.0 - 2026-09-15
+
+### Fixed
+- Align service version across `main.py`, `openapi.yaml`, and CHANGELOG (SSOT = 0.4.0)
+- Root endpoint response now matches OpenAPI contract (`service: cloudforge-ingest`, `status: ok`)
+- JWT validation errors no longer leak exception details to clients (generic 401 + server-side log)
+- Add resource limits for file uploads (max bytes / max records) to prevent memory exhaustion
+
+### Changed
+- Governance metadata consistency for Foundation validation
+
 ## v0.3.0 - 2026-09-14
 
 ### Added

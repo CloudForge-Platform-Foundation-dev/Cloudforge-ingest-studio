@@ -1,10 +1,16 @@
 """
 In-memory storage สำหรับ Ingest Studio
 
-หมายเหตุ: นี่คือ placeholder ชั่วคราว ตามแผนที่วางไว้ (ขั้นตอน 4: เพิ่ม
+⚠️  DEVELOPMENT / TEST IMPLEMENTATION ONLY
+
+นี่คือ placeholder ชั่วคราว ตามแผนที่วางไว้ (ขั้นตอน 4: เพิ่ม
 redis/db ใน compose "ทีหลังถ้าจำเป็น") — ตอนนี้ยังไม่ต้องมี DB จริง
 พอจะเปลี่ยนเป็น Postgres ทีหลัง แค่เปลี่ยน implementation ของคลาสนี้
 โดยไม่ต้องแก้ routes ใน main.py
+
+Boundary:
+  InMemoryStore = development/test only
+  Production must use Durable Ingest Store before go-live
 """
 
 import hashlib

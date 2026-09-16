@@ -18,8 +18,13 @@ def verify_jwt(token: str) -> dict:
         )
         return payload
     except Exception as e:
+        # Log detailed error server-side only; never leak JWT/JWKS details to client
+        import logging
+        logging.getLogger(__name__).warning(
+            "JWT validation failed: %s", e, exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Could not validate credentials: {str(e)}",
+            detail="Could not validate credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )

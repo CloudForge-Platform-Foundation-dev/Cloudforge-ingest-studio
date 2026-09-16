@@ -17,6 +17,13 @@ app = FastAPI(
 # จำกัด concurrent request ไม่ให้ traffic พุ่งจนระบบล่ม (fail-fast แทนต่อคิวไม่จำกัด)
 backpressure_guard = BackpressureGuard(max_concurrent=100)
 
+# Resource limits (P1 production hardening)
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+MAX_RECORDS_PER_FILE = 10_000
+# หมายเหตุ: batch size limit (1000 records) ของ JSON path บังคับผ่าน
+# IngestBatchRequest.records = Field(..., max_length=1000) ใน src/models.py
+# อยู่แล้ว ไม่ต้องมีค่าคงที่ซ้ำตรงนี้
+
 
 @app.get("/healthz", tags=["Probe"])
 def healthz():
@@ -26,7 +33,7 @@ def healthz():
 
 @app.get("/", tags=["Root"])
 def root():
-    return {"service": "ingest.ai", "status": "running", "records_stored": store.count()}
+    return {"service": "cloudforge-ingest", "status": "ok", "records_stored": store.count()}
 
 
 def _save_batch(records_with_source: list[tuple[AssetRecord, str | None]]) -> IngestBatchResponse:
@@ -100,6 +107,12 @@ async def ingest_file(
 
     raw = await file.read()
 
+    if len(raw) > MAX_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Payload Too Large: max upload size is {MAX_UPLOAD_BYTES // (1024*1024)} MB",
+        )
+
     try:
         with backpressure_guard:
             rows = parser.parse(raw, mapping_name=mapping)
@@ -107,6 +120,12 @@ async def ingest_file(
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ParseError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if len(rows) > MAX_RECORDS_PER_FILE:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Too many records: max {MAX_RECORDS_PER_FILE} records per file",
+        )
 
     pairs: list[tuple[AssetRecord, str | None]] = []
     row_errors: list[str] = []
