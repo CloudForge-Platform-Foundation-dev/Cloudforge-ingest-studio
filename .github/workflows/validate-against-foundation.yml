@@ -1,0 +1,132 @@
+﻿name: Validate Against Foundation
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  foundation-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Studio
+        uses: actions/checkout@v4
+
+      - name: Checkout Foundation
+        uses: actions/checkout@v4
+        with:
+          repository: CloudForge-Platform-Foundation-dev/CloudForge-Platform-Foundation
+          path: foundation
+          # CloudForge-Platform-Foundation is a private repo, so the default
+          # GITHUB_TOKEN (scoped only to this repo) cannot check it out.
+          # Each Studio repo must add a fine-grained PAT with read-only
+          # 'contents' access to CloudForge-Platform-Foundation as a repo
+          # secret named FOUNDATION_PAT.
+          token: ${{ secrets.FOUNDATION_PAT }}
+
+      - name: Setup validation tools
+        run: |
+          npm install -g ajv-cli ajv-formats
+
+      - name: Run Studio Contract Validation
+        run: |
+          bash foundation/scripts/validate-studio.sh .
+
+      - name: Validate Against Canonical Schemas
+        run: |
+          set -euo pipefail
+          if [ ! -d "src/schemas" ]; then
+            echo "No src/schemas/ directory found in this Studio yet  --  nothing to validate."
+            exit 0
+          fi
+          shopt -s nullglob
+          schema_files=(src/schemas/*.json)
+          if [ ${#schema_files[@]} -eq 0 ]; then
+            echo "src/schemas/ exists but contains no .json files  --  nothing to validate."
+            exit 0
+          fi
+          failed=0
+          for schema in "${schema_files[@]}"; do
+            echo "Checking $schema"
+            # --spec=draft2020 and -c ajv-formats mirror the Foundation repo's own
+            # canonical schema checks (see scripts/validate.sh), so a Studio schema
+            # is held to the same bar as the canonical schemas it's meant to extend.
+            # If a schema $refs a canonical schema under foundation/schemas/canonical/,
+            # ajv resolves that $ref for real here too  --  a broken or missing $ref
+            # fails this step instead of silently compiling around it.
+            if ajv compile -s "$schema" --spec=draft2020 -c ajv-formats --strict; then
+              echo "Valid: $schema"
+            else
+              echo "Invalid: $schema"
+              failed=1
+            fi
+          done
+          if [ "$failed" -ne 0 ]; then
+            echo "One or more Studio schemas failed validation."
+            exit 1
+          fi
+
+      - name: Security Scan (Trivy)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: table
+          severity: "CRITICAL,HIGH"
+          ignore-unfixed: true
+          exit-code: "1"
+
+  detect-openapi-spec:
+    runs-on: ubuntu-latest
+    outputs:
+      has_spec: ${{ steps.detect.outputs.has_spec }}
+      spec_path: ${{ steps.detect.outputs.spec_path }}
+    steps:
+      - name: Checkout Studio
+        uses: actions/checkout@v4
+
+      - id: detect
+        name: Detect OpenAPI spec
+        run: |
+          # A job that calls a reusable workflow via `uses:` can't have its
+          # own checkout step, so its `if:` condition can't hashFiles() the
+          # Studio's repo directly  --  that's why this lives in its own job
+          # with a real checkout, and api-governance-gate below just reads
+          # this job's outputs instead.
+          if [ -f "openapi.yaml" ]; then
+            echo "has_spec=true" >> "$GITHUB_OUTPUT"
+            echo "spec_path=openapi.yaml" >> "$GITHUB_OUTPUT"
+          elif [ -f "openapi.json" ]; then
+            echo "has_spec=true" >> "$GITHUB_OUTPUT"
+            echo "spec_path=openapi.json" >> "$GITHUB_OUTPUT"
+          else
+            echo "No openapi.yaml/openapi.json found in this Studio yet  --  nothing to validate."
+            echo "has_spec=false" >> "$GITHUB_OUTPUT"
+            echo "spec_path=" >> "$GITHUB_OUTPUT"
+          fi
+
+  api-governance-gate:
+    needs: detect-openapi-spec
+    if: needs.detect-openapi-spec.outputs.has_spec == 'true'
+    uses: niphan1000-cyber1000/foundation-validation/.github/workflows/reusable-gate.yml@v1.0.1
+    with:
+      spec_path: ${{ needs.detect-openapi-spec.outputs.spec_path }}
+      # foundation_repo/foundation_ref/environment use the reusable workflow's
+      # own defaults (this org's Foundation repo@main, production).
+      #
+      # engine_ref is the ONE exception  --  it is NOT inferred from the @v1
+      # used in `uses:` above (see reusable-gate.yml's own comment on this),
+      # and its default is "main", not "v1". Every Studio generated from this
+      # template must pin it explicitly here, or the gate silently pulls the
+      # validation engine from foundation-validation's @main on every run  -- 
+      # exactly the unpinned-version risk this whole @v1 setup exists to
+      # avoid. (cloudforge-ingest-studio shipped without this line and had
+      # to be patched after the fact  --  fixed here so future Studios don't
+      # repeat it.)
+      engine_ref: v1.0.1
+    secrets:
+      foundation_pat: ${{ secrets.FOUNDATION_PAT }}
+
+
+
