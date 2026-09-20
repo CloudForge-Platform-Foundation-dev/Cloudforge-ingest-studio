@@ -1,4 +1,4 @@
-﻿name: Validate Against Foundation
+name: Validate Against Foundation
 
 on:
   push:
@@ -109,7 +109,7 @@ jobs:
   api-governance-gate:
     needs: detect-openapi-spec
     if: needs.detect-openapi-spec.outputs.has_spec == 'true'
-    uses: niphan1000-cyber1000/foundation-validation/.github/workflows/reusable-gate.yml@v1.0.1
+    uses: niphan1000-cyber1000/foundation-validation/.github/workflows/reusable-gate.yml@v1.0.2
     with:
       spec_path: ${{ needs.detect-openapi-spec.outputs.spec_path }}
       # foundation_repo/foundation_ref/environment use the reusable workflow's
@@ -124,7 +124,7 @@ jobs:
       # avoid. (cloudforge-ingest-studio shipped without this line and had
       # to be patched after the fact  --  fixed here so future Studios don't
       # repeat it.)
-      engine_ref: v1.0.1
+      engine_ref: v1.0.2
     secrets:
       foundation_pat: ${{ secrets.FOUNDATION_PAT }}
 
