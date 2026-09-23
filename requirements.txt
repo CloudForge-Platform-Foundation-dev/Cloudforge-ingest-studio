@@ -3,5 +3,10 @@ uvicorn[standard]==0.52.4
 python-multipart==0.0.32
 PyYAML==6.0.3
 openpyxl==3.1.5
-PyJWT==2.14.0
 pydantic-settings==2.15.0
+# JWT verification / scope enforcement now lives in the shared package,
+# implementing CloudForge Identity Contract v1. Do not add PyJWT directly
+# here — reimplementing auth logic per-Studio is exactly the drift this
+# package exists to prevent. Replace with the real install source once
+# published (private index / git ref) — see MIGRATION_NOTES.md.
+cloudforge-auth-core==1.1.*
