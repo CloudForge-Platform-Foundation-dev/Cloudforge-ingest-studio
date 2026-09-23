@@ -15,11 +15,28 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
-from src.auth.dependencies import get_current_user
+from src.auth.dependencies import Principal, get_current_user
 from src.main import app
 from src.storage import store
 
-FULL_ACCESS_USER = {"sub": "test-user", "scopes": ["ingest:read", "ingest:write"]}
+
+def _principal(sub: str, scopes: list[str]) -> Principal:
+    """
+    Build a Principal the way cloudforge_auth_core would after verifying a
+    real token, for use in dependency_overrides. Tests must override with
+    a Principal (not a plain dict) since require_scope() now calls
+    principal.has_scope(...) — a dict has no such method.
+    """
+    return Principal(
+        sub=sub,
+        iss="https://identity.cloudforge.internal",
+        aud="cloudforge-platform",
+        scopes=frozenset(scopes),
+        raw_claims={},
+    )
+
+
+FULL_ACCESS_USER = _principal("test-user", ["ingest:read", "ingest:write"])
 
 
 @pytest.fixture(autouse=True)
@@ -178,10 +195,9 @@ class TestScopeEnforcement:
     (แยกจาก test_route_enforcement.py ที่คุมเคส unauthenticated -> 401)"""
 
     def test_write_scope_required_for_ingest(self, client):
-        app.dependency_overrides[get_current_user] = lambda: {
-            "sub": "read-only-user",
-            "scopes": ["ingest:read"],  # ไม่มี ingest:write
-        }
+        app.dependency_overrides[get_current_user] = lambda: _principal(
+            "read-only-user", ["ingest:read"]  # ไม่มี ingest:write
+        )
         resp = client.post(
             "/ingest",
             json={"records": [{"source_system": "aws", "asset_type": "vm", "external_id": "i-1"}]},
@@ -189,9 +205,8 @@ class TestScopeEnforcement:
         assert resp.status_code == 403
 
     def test_read_scope_required_for_list(self, client):
-        app.dependency_overrides[get_current_user] = lambda: {
-            "sub": "write-only-user",
-            "scopes": ["ingest:write"],  # ไม่มี ingest:read
-        }
+        app.dependency_overrides[get_current_user] = lambda: _principal(
+            "write-only-user", ["ingest:write"]  # ไม่มี ingest:read
+        )
         resp = client.get("/ingest")
         assert resp.status_code == 403
