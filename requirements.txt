@@ -9,4 +9,4 @@ pydantic-settings==2.15.0
 # here — reimplementing auth logic per-Studio is exactly the drift this
 # package exists to prevent. Replace with the real install source once
 # published (private index / git ref) — see MIGRATION_NOTES.md.
-cloudforge-auth-core @ git+https://github.com/CloudForge-Platform-Foundation-dev/cloudforge-auth-core.git@v1.1.0*
+cloudforge-auth-core @ git+https://github.com/CloudForge-Platform-Foundation-dev/cloudforge-auth-core.git@v1.1.3
